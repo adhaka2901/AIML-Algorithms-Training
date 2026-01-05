@@ -1,0 +1,35 @@
+# Core ML Libraries
+numpy>=1.21.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Encoding
+category-encoders>=2.5.0
+
+# Visualization
+matplotlib>=3.5.0
+seaborn>=0.12.0
+plotly>=5.10.0
+
+# Experiment Tracking (optional but recommended)
+mlflow>=2.0.0
+
+# Utilities
+tqdm>=4.64.0
+joblib>=1.2.0
+
+# For notebooks
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# Data validation
+great-expectations>=0.15.0  # optional
+
+# Development tools
+black>=22.0.0  # code formatting
+flake8>=4.0.0  # linting
+pytest>=7.0.0  # testing

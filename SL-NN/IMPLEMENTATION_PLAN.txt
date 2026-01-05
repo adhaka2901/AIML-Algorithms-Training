@@ -1,0 +1,532 @@
+"""
+===============================================================================
+NEURAL NETWORK IMPLEMENTATION PLAN - COMPREHENSIVE SUMMARY
+CS7641 Supervised Learning Assignment - Fall 2025
+===============================================================================
+
+This document provides a complete overview of the NN implementation plan,
+key design decisions, and quick reference for all components.
+
+===============================================================================
+PART 1: EXECUTIVE SUMMARY
+===============================================================================
+
+OBJECTIVE:
+Implement neural network experiments for 2 datasets (Hotel Bookings, US Accidents)
+comparing shallow-wide vs. deep-narrow architectures with full evaluation.
+
+KEY CONSTRAINTS (CRITICAL):
+✓ SGD only - NO momentum, NO Adam/adaptive optimizers
+✓ Parameter budget: 0.2M - 1.0M parameters
+✓ Max 15 epochs with early stopping (patience 2-3)
+✓ Batch size: 512-2048
+✓ L2 regularization: 1e-4 to 1e-3
+✓ float32 precision throughout
+
+DELIVERABLES:
+1. Two architectures per dataset (shallow-wide, deep-narrow)
+2. Three required curves per model:
+   - Epoch curves (loss/metric vs. epoch)
+   - Learning curves (metric vs. training size)
+   - Model complexity curves (metric vs. hyperparameter)
+3. Classification-specific: ROC, PR, confusion matrix, calibration
+4. Regression-specific: Residual plots
+5. Comprehensive metrics and timing data
+6. 8-page LaTeX report with analysis
+
+===============================================================================
+PART 2: IMPLEMENTATION COMPONENTS
+===============================================================================
+
+MODULE STRUCTURE:
+----------------
+
+1. nn_config.py
+   Purpose: Centralized configuration management
+   Contains:
+   - NNArchitectureConfig (layer definitions)
+   - TrainingConfig (hyperparameters)
+   - ExperimentConfig (complete setup)
+   - Predefined configs for both datasets
+   
+   Usage:
+   >>> from nn_config import get_hotel_classification_config
+   >>> config = get_hotel_classification_config()
+   >>> config.training.validate()
+
+2. preprocessing.py
+   Purpose: Data preprocessing with leakage prevention
+   Features:
+   - Dataset-specific leakage controls
+   - Target/frequency encoding
+   - StandardScaler (fit on train only)
+   - Stratified splits
+   
+   Critical Leakage Controls:
+   - Hotel (is_canceled): DROP ['reservation_status', 'reservation_status_date']
+   - US Accidents (Severity): DROP ['End_Time'], filter post-dated Weather_Timestamp
+   
+   Usage:
+   >>> preprocessor = DataPreprocessor('hotel', 'classification', 'is_canceled')
+   >>> data = preprocessor.fit_transform(df, test_size=0.2, val_size=0.2)
+
+3. architectures.py
+   Purpose: Flexible MLP with parameter validation
+   Features:
+   - Configurable depth/width
+   - Multiple activation functions
+   - Parameter counting
+   - Budget validation
+   
+   Example Architectures:
+   - Shallow-wide: [512, 512] → ~260k params (100 input, 1 output)
+   - Deep-narrow: [256, 256, 128, 128] → ~130k params
+   
+   Usage:
+   >>> model = FlexibleMLP(100, [512, 512], 1, activation='relu')
+   >>> print(model.count_parameters())
+
+4. trainer.py
+   Purpose: Training loop with early stopping
+   Features:
+   - SGD optimizer (enforced, no momentum)
+   - Early stopping with patience
+   - Training history tracking
+   - Timing measurements
+   
+   Critical: Enforces assignment requirements:
+   - assert max_epochs <= 15
+   - assert 512 <= batch_size <= 2048
+   - assert momentum == 0.0
+   
+   Usage:
+   >>> trainer = NNTrainer(model, 'classification', learning_rate=0.01)
+   >>> history = trainer.fit(X_train, y_train, X_val, y_val)
+
+5. evaluator.py
+   Purpose: All evaluation metrics and visualizations
+   Features:
+   - Epoch curves with early stopping marker
+   - Learning curves with bias/variance diagnosis
+   - Model complexity curves
+   - ROC/PR curves with baselines
+   - Confusion matrix
+   - Calibration curves
+   - Residual plots
+   
+   Usage:
+   >>> evaluator = NNEvaluator('classification')
+   >>> evaluator.plot_epoch_curve(history, best_epoch)
+   >>> metrics = evaluator.compute_metrics(y_true, y_pred, y_proba)
+
+6. nn_experiment.py
+   Purpose: Complete experiment orchestration
+   Features:
+   - End-to-end workflow
+   - All experiments in one place
+   - Results persistence
+   - Reproducibility controls
+   
+   Usage:
+   >>> experiment = NNExperiment(config)
+   >>> data = experiment.load_and_preprocess_data(df)
+   >>> experiment.compare_architectures(data)
+   >>> experiment.generate_learning_curves(data)
+
+===============================================================================
+PART 3: IMPLEMENTATION TIMELINE
+===============================================================================
+
+WEEK 1: Foundation & Core Components
+-------------------------------------
+Day 1-2: Setup
+- Install dependencies
+- Create project structure
+- Initialize configs
+- Validate parameter budgets
+
+Day 3-4: Preprocessing
+- Implement DataPreprocessor
+- Apply leakage controls
+- Test encoding strategies
+- Validate splits
+
+Day 5-6: Architectures
+- Implement FlexibleMLP
+- Create architecture pairs
+- Validate parameter counts
+- Test forward/backward passes
+
+Day 7-8: Training
+- Implement NNTrainer
+- Enforce SGD constraints
+- Implement early stopping
+- Test on small datasets
+
+WEEK 2: Experiments & Evaluation
+---------------------------------
+Day 9-10: Evaluation
+- Implement all plot types
+- Test metrics computation
+- Validate plot generation
+
+Day 11-13: Full Experiments
+- Run Hotel experiments (both tasks)
+- Run US Accidents experiments
+- Generate all required plots
+- Document hyperparameters
+
+WEEK 3: Analysis & Report
+--------------------------
+Day 14-16: Report Writing
+- Interpret results
+- Compare architectures
+- Discuss trade-offs
+- Write LaTeX report
+- Proofread and submit
+
+===============================================================================
+PART 4: CRITICAL DESIGN DECISIONS
+===============================================================================
+
+1. WHY SEPARATE ARCHITECTURES MODULE?
+   - Encapsulates model definitions
+   - Easy to add new architectures
+   - Parameter validation centralized
+   - Reusable across experiments
+
+2. WHY TRAINER ENFORCES CONSTRAINTS?
+   - Prevents accidental violations
+   - Clear error messages
+   - Self-documenting code
+   - Assignment compliance guaranteed
+
+3. WHY PREPROCESSING SEPARATE FROM EXPERIMENT?
+   - Reusable across algorithms (DT, SVM, kNN)
+   - Testable in isolation
+   - Leakage controls explicit
+   - Easier to debug
+
+4. WHY CONFIGURATION-DRIVEN?
+   - Reproducibility
+   - Easy to compare settings
+   - Prevents magic numbers
+   - Self-documenting experiments
+
+===============================================================================
+PART 5: ARCHITECTURE COMPARISON STRATEGY
+===============================================================================
+
+SHALLOW-WIDE vs. DEEP-NARROW:
+
+Shallow-Wide (2 layers):
+- Layers: [512, 512]
+- Pros: Faster training, more capacity per layer
+- Cons: Limited representation hierarchy
+- Best for: Linearly separable features after first transform
+
+Deep-Narrow (4 layers):
+- Layers: [256, 256, 128, 128]
+- Pros: Hierarchical representations, regularization through depth
+- Cons: Harder to train with SGD, gradient flow issues
+- Best for: Complex, hierarchical patterns
+
+Comparison Metrics:
+1. Validation performance (primary)
+2. Training time (efficiency)
+3. Convergence speed (epochs to best)
+4. Stability (variance across runs)
+
+Expected Findings:
+- Shallow may converge faster
+- Deep may generalize better
+- Trade-off depends on data complexity
+
+===============================================================================
+PART 6: HYPERPARAMETER TUNING STRATEGY
+===============================================================================
+
+FIXED (per assignment):
+- Optimizer: SGD (no momentum)
+- Batch size: Choose once per dataset, hold fixed
+- Max epochs: 15
+- Early stopping patience: 2-3
+- L2 weight decay: 1e-4 to 1e-3
+
+TUNABLE (for model complexity curves):
+- Learning rate: [0.001, 0.005, 0.01, 0.05]
+- Architecture width: [128, 256, 384, 512, 640]
+- L2 strength: [1e-5, 1e-4, 5e-4, 1e-3]
+
+RECOMMENDED APPROACH:
+1. Start with learning_rate=0.01, batch_size=512
+2. If unstable: reduce LR to 0.001
+3. If underfitting: increase width
+4. If overfitting: increase L2 or reduce width
+5. Generate complexity curve varying one at a time
+
+===============================================================================
+PART 7: COMMON PITFALLS & SOLUTIONS
+===============================================================================
+
+PITFALL 1: Parameters outside budget
+Problem: Architecture too large/small
+Solution:
+>>> params = model.count_parameters()['trainable']
+>>> if params > 1_000_000:
+>>>     # Reduce width or depth
+>>>     model = FlexibleMLP(input_dim, [384, 384], output_dim)
+
+PITFALL 2: Early stopping too aggressive
+Problem: Stops before finding good solution
+Solution:
+>>> config.training.early_stopping_patience = 3  # Instead of 2
+
+PITFALL 3: Training unstable/diverging
+Problem: Loss explodes or oscillates
+Solution 1: Lower learning rate
+>>> config.training.learning_rate = 0.001
+Solution 2: Increase L2
+>>> config.training.l2_weight_decay = 1e-3
+Solution 3: Check feature scaling
+>>> preprocessor = DataPreprocessor(...)  # Handles automatically
+
+PITFALL 4: Leakage not prevented
+Problem: Test performance unrealistically high
+Solution: Use DataPreprocessor, which applies controls
+>>> data = preprocessor.fit_transform(df)  # Auto-applies leakage controls
+
+PITFALL 5: Results not reproducible
+Problem: Different results each run
+Solution: Set all seeds
+>>> torch.manual_seed(42)
+>>> np.random.seed(42)
+>>> # TrainingConfig has random_seed parameter
+
+===============================================================================
+PART 8: DATASET-SPECIFIC GUIDANCE
+===============================================================================
+
+HOTEL BOOKINGS (~119k rows):
+----------------------------
+Target Options:
+1. is_canceled (binary classification) ✓ RECOMMENDED
+2. adr (regression)
+3. lead_time (regression)
+
+Leakage Controls:
+- DROP: reservation_status, reservation_status_date
+
+Challenges:
+- Moderate imbalance (~37% cancellations)
+- High-cardinality: country, agent, company
+- Temporal: arrival_date features
+
+Strategy:
+- Use stratified splits
+- Target-encode high-cardinality features
+- Report PR-AUC alongside ROC-AUC
+- Consider class_weight='balanced'
+
+US ACCIDENTS (millions of rows):
+---------------------------------
+Target Options:
+1. Severity (multiclass 1-4) ✓ RECOMMENDED
+2. incident_duration (regression, derived)
+
+Leakage Controls:
+- DROP: End_Time
+- FILTER: Post-dated Weather_Timestamp
+
+Challenges:
+- Very large dataset
+- High-cardinality: City, Street, Zipcode
+- Severe imbalance across severity levels
+- Spatiotemporal correlations
+
+Strategy:
+- Stratified subsample (≥80% after cleaning)
+- Use larger batch_size (2048)
+- Target-encode location features
+- Report PR-AUC (critical for imbalance)
+- Document compute justification if <80%
+
+===============================================================================
+PART 9: EVALUATION CHECKLIST
+===============================================================================
+
+FOR EACH ARCHITECTURE, EACH DATASET:
+□ Epoch curve saved
+□ Learning curve saved
+□ Model complexity curve saved
+□ ROC curve saved (classification)
+□ PR curve saved (classification)
+□ Confusion matrix saved (classification)
+□ Calibration curve saved (classification)
+□ Residual plots saved (regression)
+□ Metrics JSON saved
+□ Model checkpoint saved
+□ Training time logged
+□ Prediction time logged
+□ Hardware documented
+□ Hyperparameters recorded
+□ Random seeds documented
+
+FOR CROSS-MODEL COMPARISON:
+□ Performance table (all metrics)
+□ Runtime table (fit + predict)
+□ Parameter count comparison
+□ Convergence speed comparison
+□ Trade-off analysis written
+
+FOR REPORT:
+□ All figures included
+□ Figures interpreted (not just described)
+□ Trade-offs discussed with evidence
+□ Connection to course concepts
+□ Type I/II errors discussed (classification)
+□ Next steps identified
+□ Citations present (≥2 peer-reviewed)
+□ Overleaf link included
+□ ≤8 pages including references
+
+===============================================================================
+PART 10: QUICK REFERENCE CODE SNIPPETS
+===============================================================================
+
+COMPLETE WORKFLOW:
+------------------
+```python
+# 1. Configuration
+from nn_config import get_hotel_classification_config
+config = get_hotel_classification_config()
+
+# 2. Data
+from preprocessing import DataPreprocessor
+preprocessor = DataPreprocessor('hotel', 'classification', 'is_canceled')
+data = preprocessor.fit_transform(df, test_size=0.2, val_size=0.2)
+
+# 3. Model
+from architectures import FlexibleMLP
+model = FlexibleMLP(
+    input_dim=data['n_features'],
+    hidden_layers=[512, 512],
+    output_dim=1,
+    activation='relu',
+    task_type='classification'
+)
+
+# 4. Training
+from trainer import NNTrainer
+trainer = NNTrainer(model, 'classification', learning_rate=0.01)
+history = trainer.fit(data['X_train'], data['y_train'], 
+                     data['X_val'], data['y_val'])
+
+# 5. Prediction
+y_pred = trainer.predict(data['X_test'])
+y_proba = trainer.predict(data['X_test'], return_proba=True)
+
+# 6. Evaluation
+from evaluator import NNEvaluator
+evaluator = NNEvaluator('classification')
+metrics = evaluator.compute_metrics(data['y_test'], y_pred, y_proba)
+evaluator.print_metrics(metrics)
+
+# 7. Plots
+evaluator.plot_epoch_curve(history, trainer.best_epoch)
+evaluator.plot_roc_curve(data['y_test'], y_proba)
+evaluator.plot_pr_curve(data['y_test'], y_proba)
+evaluator.plot_confusion_matrix(data['y_test'], y_pred)
+```
+
+ARCHITECTURE VALIDATION:
+------------------------
+```python
+from architectures import ArchitectureValidator
+
+# Check single architecture
+is_valid, warnings = ArchitectureValidator.validate_architecture(model)
+if not is_valid:
+    for w in warnings:
+        print(f"⚠ {w}")
+
+# Compare two architectures
+comparison = ArchitectureValidator.compare_architectures(model1, model2)
+print(f"Params diff: {comparison['diff_fraction']*100:.1f}%")
+```
+
+LEARNING CURVE GENERATION:
+---------------------------
+```python
+train_sizes = [1000, 5000, 10000, 50000, len(X_train)]
+train_scores, val_scores = [], []
+
+for size in train_sizes:
+    X_sub = X_train[:size]
+    y_sub = y_train[:size]
+    
+    model = FlexibleMLP(...)
+    trainer = NNTrainer(model, ...)
+    trainer.fit(X_sub, y_sub, X_val, y_val, verbose=False)
+    
+    # Evaluate and store scores
+    ...
+
+evaluator.plot_learning_curve(train_sizes, train_scores, val_scores)
+```
+
+===============================================================================
+PART 11: SUCCESS CRITERIA
+===============================================================================
+
+Your implementation is COMPLETE when:
+
+✓ All code modules run without errors
+✓ All required plots generate correctly
+✓ Parameter budgets validated (0.2M - 1.0M)
+✓ SGD constraints enforced (no momentum)
+✓ Early stopping triggers appropriately
+✓ Leakage controls documented and applied
+✓ Results are reproducible (fixed seeds)
+✓ All metrics computed correctly
+✓ Hardware and runtime logged
+✓ Code is modular and well-documented
+✓ Ready to write comprehensive analysis
+
+===============================================================================
+PART 12: FINAL RECOMMENDATIONS
+===============================================================================
+
+1. START EARLY: Preprocessing and architecture setup take longer than expected
+
+2. TEST INCREMENTALLY: Validate each module before moving to the next
+
+3. USE SMALL DATASETS FIRST: Prototype on 10% of data, then scale up
+
+4. LOG EVERYTHING: Save all hyperparameters, seeds, hardware specs
+
+5. VERSION CONTROL: Use Git to track experiments
+
+6. DOCUMENT AS YOU GO: Don't wait until the end to write analysis
+
+7. COMPARE CONTINUOUSLY: Run both architectures in parallel for fair comparison
+
+8. BUDGET TIME FOR DEBUGGING: Expect 20-30% of time on debugging
+
+9. BACKUP RESULTS: Save figures and metrics immediately after generation
+
+10. ASK FOR HELP EARLY: Use Ed Discussion and office hours
+
+===============================================================================
+END OF IMPLEMENTATION PLAN
+===============================================================================
+
+This implementation provides a complete, production-ready framework for
+the Neural Network component of the Supervised Learning assignment.
+
+All components are modular, well-documented, and aligned with assignment
+requirements. The code enforces critical constraints and provides
+comprehensive evaluation capabilities.
+
+Good luck with your experiments! 🚀
+"""

@@ -1,0 +1,9 @@
+data/
+*.epub
+*.html
+markdown/
+models/
+*.pdf
+*.epub
+*.fthr
+__pycache__
